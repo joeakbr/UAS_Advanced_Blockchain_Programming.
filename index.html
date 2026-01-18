@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtherRide - Ojek Blockchain</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.6.1/web3.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .main-container { background-color: #fff; width: 100%; max-width: 550px; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #ddd; }
+        h2 { text-align: center; color: #1a1a1a; margin-bottom: 5px; }
+        p.sub-header { text-align: center; color: #666; font-size: 0.9em; margin-bottom: 25px; }
+        
+        .wallet-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .wallet-info div:first-child { font-size: 0.75em; color: #666; text-transform: uppercase; font-weight: bold; }
+        #account { font-family: monospace; font-weight: bold; color: #2d3436; font-size: 1em; }
+        #network-name { font-size: 0.8em; color: #d35400; font-weight: bold; }
+
+        .panel { border: 1px solid #eee; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        .driver-panel { background-color: #fffcf5; border-left: 5px solid #f1c40f; }
+        .rider-panel { background-color: #f5faff; border-left: 5px solid #3498db; }
+        
+        h3 { margin-top: 0; font-size: 1.1em; color: #2d3436; }
+        input { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        
+        button { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: 0.2s; width: 100%; margin-top: 5px; }
+        .btn-black { background: #2d3436; color: white; }
+        .btn-blue { background: #0984e3; color: white; }
+        .btn-yellow { background: #fdcb6e; color: #2d3436; }
+        .btn-green { background: #00b894; color: white; }
+
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .label-small { font-size: 0.8em; color: #636e72; margin: 10px 0 5px 0; display: block; font-weight: bold; }
+        .status-log { background: #2d3436; color: #00ff9d; padding: 15px; border-radius: 6px; font-family: monospace; font-size: 0.85em; margin-top: 20px; min-height: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <h2>🚖 EtherRide</h2>
+        <p class="sub-header">Sistem Ride Sharing Terdesentralisasi</p>
+
+        <div class="wallet-box">
+            <div class="wallet-info">
+                <div id="network-name">Jaringan: Terdeteksi...</div>
+                <div id="account">Belum Terhubung</div>
+            </div>
+            <button class="btn-black" onclick="connectWallet()" style="width: auto; padding: 10px 15px;">🔗 Konek</button>
+        </div>
+
+        <div class="panel driver-panel">
+            <h3>👨‍✈️ Panel Pengemudi</h3>
+            <input type="text" id="regName" placeholder="Nama Lengkap">
+            <input type="text" id="regPlate" placeholder="Plat Nomor (B 1234 XX)">
+            <input type="text" id="regType" placeholder="Tipe Kendaraan (Motor/Mobil)">
+            <input type="number" id="regRate" placeholder="Tarif (Contoh: 5000)">
+            <button class="btn-yellow" onclick="registerDriver()">Daftar Jadi Supir</button>
+            
+            <label class="label-small">Kelola Pesanan (Masukkan ID Order):</label>
+            <input type="number" id="driverRideId" placeholder="ID Order...">
+            <div class="grid-3">
+                <button class="btn-black" onclick="acceptRide()">Accept</button>
+                <button class="btn-black" onclick="startRide()">Start</button>
+                <button class="btn-green" onclick="completeRide()">Complete</button>
+            </div>
+        </div>
+
+        <div class="panel rider-panel">
+            <h3>🙋‍♂️ Panel Penumpang</h3>
+            <input type="text" id="pickup" placeholder="Lokasi Penjemputan">
+            <input type="text" id="dest" placeholder="Lokasi Tujuan">
+            <input type="number" id="fare" placeholder="Harga Penawaran (dalam ETH)">
+            <button class="btn-blue" onclick="requestRide()">Request Perjalanan</button>
+            
+            <label class="label-small">Pembayaran & Konfirmasi (Masukkan ID Order):</label>
+            <input type="number" id="riderRideId" placeholder="ID Order Anda...">
+            <div class="grid-2">
+                <button class="btn-yellow" onclick="fundRide()">💰 Bayar Escrow</button>
+                <button class="btn-green" onclick="confirmArrival()">✅ Sampai Tujuan</button>
+            </div>
+        </div>
+
+        <div class="status-log">> Silakan hubungkan wallet Anda...</div>
+    </div>
+
+    <script>
+        let web3, contract, userAccount;
+        
+        
+        const contractAddress = "0xCB15e7a0556c017554b908f1A853679ECda27ebf"; 
+        
+
+       
+        const abi = [
+            {"inputs":[{"internalType":"string","name":"_name","type":"string"},{"internalType":"string","name":"_plate","type":"string"},{"internalType":"string","name":"_vehicleType","type":"string"},{"internalType":"uint256","name":"_rate","type":"uint256"}],"name":"registerDriver","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"string","name":"_pickup","type":"string"},{"internalType":"string","name":"_dest","type":"string"},{"internalType":"uint256","name":"_fare","type":"uint256"}],"name":"requestRide","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"acceptRide","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"fundRide","outputs":[],"stateMutability":"payable","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"startRide","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"completeRide","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"_id","type":"uint256"}],"name":"confirmArrival","outputs":[],"stateMutability":"nonpayable","type":"function"}
+        ];
+
+        function log(txt) { document.querySelector(".status-log").innerText = "> " + txt; }
+
+        async function connectWallet() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    userAccount = accounts[0];
+                    document.getElementById("account").innerText = userAccount.substring(0, 8) + "...";
+                    
+                    const netId = await web3.eth.net.getId();
+                    const netName = (netId == 11155111) ? "Sepolia Testnet (OK)" : "Bukan Sepolia!";
+                    document.getElementById("network-name").innerText = "Jaringan: " + netName;
+                    if(netId != 11155111) document.getElementById("network-name").style.color = "red";
+                    else document.getElementById("network-name").style.color = "green";
+
+                    contract = new web3.eth.Contract(abi, contractAddress);
+                    log("Koneksi Berhasil! Wallet terhubung.");
+                } catch (e) { log("Koneksi Ditolak."); }
+            } else { alert("MetaMask tidak terdeteksi!"); }
+        }
+
+        async function registerDriver() {
+            if(!contract) return alert("Konek wallet dulu!");
+            const n = document.getElementById("regName").value;
+            const p = document.getElementById("regPlate").value;
+            const t = document.getElementById("regType").value;
+            const r = document.getElementById("regRate").value;
+
+            if(!n || !p || !t || !r) return alert("Isi semua data driver!");
+
+            log("Mendaftarkan data pengemudi...");
+            try {
+                // Mengirim 4 parameter sesuai Solidity terbaru
+                await contract.methods.registerDriver(n, p, t, r).send({ from: userAccount });
+                log("Registrasi Berhasil!");
+            } catch(e) { log("Error: " + e.message); }
+        }
+
+        async function requestRide() {
+            if(!contract) return alert("Konek wallet dulu!");
+            const p = document.getElementById("pickup").value;
+            const d = document.getElementById("dest").value;
+            const f = document.getElementById("fare").value;
+            log("Sedang mengirim pesanan...");
+            try {
+                const fWei = web3.utils.toWei(f, "ether");
+                await contract.methods.requestRide(p, d, fWei).send({ from: userAccount });
+                log("Pesanan terkirim! Silakan tunggu driver.");
+            } catch(e) { log("Error: " + e.message); }
+        }
+
+        async function acceptRide() {
+            const id = document.getElementById("driverRideId").value;
+            log("Menerima pesanan...");
+            try {
+                await contract.methods.acceptRide(id).send({ from: userAccount });
+                log("Pesanan diterima! Menunggu pembayaran penumpang.");
+            } catch(e) { log("Error: " + e.message); }
+        }
+
+        async function fundRide() {
+            const id = document.getElementById("riderRideId").value;
+            const f = document.getElementById("fare").value; // Mengambil harga dari input atas
+            if(!f) return alert("Masukkan harga dulu di atas!");
+            
+            log("Mengirim dana ke kontrak (Escrow)...");
+            try {
+                const fWei = web3.utils.toWei(f, "ether");
+                await contract.methods.fundRide(id).send({ from: userAccount, value: fWei });
+                log("Dana aman di sistem. Supir silakan menjemput.");
+            } catch(e) { log("Error: " + e.message); }
+        }
+
+        async function startRide() {
+            const id = document.getElementById("driverRideId").value;
+            try { await contract.methods.startRide(id).send({ from: userAccount }); log("Perjalanan Dimulai!"); }
+            catch(e) { log("Error: " + e.message); }
+        }
+
+        async function completeRide() {
+            const id = document.getElementById("driverRideId").value;
+            try { await contract.methods.completeRide(id).send({ from: userAccount }); log("Supir selesai! Menunggu konfirmasi penumpang."); }
+            catch(e) { log("Error: " + e.message); }
+        }
+
+        async function confirmArrival() {
+            const id = document.getElementById("riderRideId").value;
+            log("Konfirmasi sampai & mencairkan dana...");
+            try {
+                await contract.methods.confirmArrival(id).send({ from: userAccount });
+                log("Transaksi Tuntas! Dana telah dikirim ke supir.");
+            } catch(e) { log("Error: " + e.message); }
+        }
+    </script>
+</body>
+</html>
